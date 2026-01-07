@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImpactLens | Dashboard</title>
+    <!-- Load React 18 -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Load Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Load Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js (More stable than Recharts for CDNs) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-[#0f172a] text-slate-100 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [view, setView] = useState('login');
+            const [data, setData] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            // Function to render the Chart
+            const renderChart = (chartData) => {
+                const ctx = document.getElementById('impactChart');
+                if (!ctx) return;
+                
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                }
+
+                chartInstance.current = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'Engineers',
+                            data: chartData.map(d => ({ x: d.total_activity, y: d.total_impact, author: d.author })),
+                            backgroundColor: chartData.map(d => parseFloat(d.zScore) > 0 ? '#a855f7' : '#3b82f6'),
+                            pointRadius: 8,
+                            pointHoverRadius: 12
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { title: { display: true, text: 'Activity (Commits)', color: '#94a3b8' }, grid: { color: '#334155' } },
+                            y: { title: { display: true, text: 'AI Impact Score', color: '#94a3b8' }, grid: { color: '#334155' } }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: (ctx) => ` @${ctx.raw.author}: Impact ${ctx.raw.y}`
+                                }
+                            }
+                        }
+                    }
+                });
+            };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                setView('dash');
+            };
+
+            const sync = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/analyze');
+                    const d = await res.json();
+                    setData(d);
+                    renderChart(d); // Render chart after data fetch
+                } catch (err) {
+                    console.error("Fetch error:", err);
+                }
+                setLoading(false);
+            };
+
+            // Login View
+            if (view === 'login') return (
+                <div className="flex h-screen items-center justify-center bg-slate-900">
+                    <form onSubmit={handleLogin} className="p-10 bg-slate-800 rounded-3xl shadow-2xl border border-slate-700 w-96 text-center">
+                        <h1 className="text-4xl font-black text-blue-500 mb-2">ImpactLens</h1>
+                        <p className="text-slate-400 mb-8 italic text-sm">Visibility vs. Impact Monitor</p>
+                        <input required placeholder="Admin ID (MAIN-001)" className="w-full mb-4 p-4 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input required type="password" placeholder="Password (admin)" className="w-full mb-6 p-4 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500" />
+                        <button type="submit" className="w-full bg-blue-600 py-4 rounded-xl font-bold hover:bg-blue-500 transition-all text-white">Login</button>
+                    </form>
+                </div>
+            );
+
+            // Dashboard View
+            return (
+                <div className="p-8 max-w-7xl mx-auto">
+                    <header className="flex justify-between items-center mb-12">
+                        <div>
+                            <h1 className="text-3xl font-bold">Manager Dashboard</h1>
+                            <p className="text-slate-400 italic">Alpha Squad Performance</p>
+                        </div>
+                        <button onClick={sync} className="bg-emerald-600 px-8 py-3 rounded-xl font-bold hover:bg-emerald-500 shadow-lg shadow-emerald-900/20 transition-all">
+                            {loading ? 'Analyzing Git...' : 'Sync Live Repo Data'}
+                        </button>
+                    </header>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl h-[500px] flex flex-col">
+                            <h3 className="text-xl font-bold mb-6 text-white">Impact Matrix (Z-Score)</h3>
+                            <div className="flex-grow">
+                                <canvas id="impactChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl overflow-y-auto max-h-[500px]">
+                            <h3 className="text-xl font-bold mb-6 text-white text-purple-400">Silent Architects Identified</h3>
+                            <div className="space-y-4">
+                                {data.filter(d => parseFloat(d.zScore) > 0).map((d, i) => (
+                                    <div key={i} className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-2xl flex justify-between items-center">
+                                        <span className="font-bold text-purple-300">@{d.author}</span>
+                                        <span className="text-xs bg-purple-600 px-3 py-1 rounded-full text-white font-bold tracking-wider uppercase">High Value</span>
+                                    </div>
+                                ))}
+                                {data.length === 0 && <p className="text-slate-500 italic">No data. Click sync to analyze GitHub commits.</p>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

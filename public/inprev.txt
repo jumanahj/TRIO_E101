@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>ImpactLens | Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState } = React;
+        const { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } = Recharts;
+
+        function App() {
+            const [view, setView] = useState('login');
+            const [data, setData] = useState([]);
+            const [loading, setLoading] = useState(false);
+
+            const login = (e) => { e.preventDefault(); setView('dash'); };
+            const sync = () => {
+                setLoading(true);
+                fetch('/api/analyze').then(r => r.json()).then(d => { setData(d); setLoading(false); });
+            };
+
+            if (view === 'login') return (
+                <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
+                    <form onSubmit={login} className="p-10 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-96 text-center">
+                        <h1 className="text-4xl font-black text-blue-500 mb-2">ImpactLens</h1>
+                        <p className="text-slate-400 mb-8 italic text-sm">Visibility vs. Impact Monitor</p>
+                        <input placeholder="Admin ID (MAIN-001)" className="w-full mb-4 p-4 rounded-xl bg-slate-900 border border-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="password" placeholder="Password (admin)" className="w-full mb-6 p-4 rounded-xl bg-slate-900 border border-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                        <button className="w-full bg-blue-600 py-4 rounded-xl font-bold hover:bg-blue-500 transition-all">Login</button>
+                    </form>
+                </div>
+            );
+
+            return (
+                <div className="p-8 max-w-7xl mx-auto">
+                    <header className="flex justify-between items-center mb-12">
+                        <div>
+                            <h1 className="text-3xl font-bold">Manager Dashboard</h1>
+                            <p className="text-slate-400">Monitoring Team: Alpha Squad</p>
+                        </div>
+                        <button onClick={sync} className="bg-emerald-600 px-8 py-3 rounded-xl font-bold hover:bg-emerald-500 shadow-lg shadow-emerald-900/20 transition-all">
+                            {loading ? 'Analyzing Git...' : 'Sync Live Repo Data'}
+                        </button>
+                    </header>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl h-[500px]">
+                            <h3 className="text-xl font-bold mb-6">Contribution Matrix (Z-Score Analysis)</h3>
+                            <ResponsiveContainer width="100%" height="90%">
+                                <ScatterChart>
+                                    <CartesianGrid stroke="#334155" />
+                                    <XAxis dataKey="total_activity" name="Activity" stroke="#94a3b8" />
+                                    <YAxis dataKey="total_impact" name="Impact" stroke="#94a3b8" />
+                                    <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+                                    <Scatter data={data} fill="#3b82f6">
+                                        {data.map((e, i) => <Cell key={i} fill={e.zScore > 0 ? '#a855f7' : '#3b82f6'} />)}
+                                    </Scatter>
+                                </ScatterChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl">
+                            <h3 className="text-xl font-bold mb-6">Silent Architects Identified</h3>
+                            <div className="space-y-4">
+                                {data.filter(d => d.zScore > 0).map(d => (
+                                    <div className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-2xl flex justify-between items-center">
+                                        <span className="font-bold">@{d.author}</span>
+                                        <span className="text-xs bg-purple-500 px-2 py-1 rounded text-white">Impact: High</span>
+                                    </div>
+                                ))}
+                                {data.length === 0 && <p className="text-slate-500 italic">No data yet. Click sync.</p>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
