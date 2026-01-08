@@ -6,8 +6,43 @@ export interface User {
   name: string;
   role: Role;
   github_username: string;
+  password?: string;
   team_id?: string;
   avatar_url?: string;
+  is_technical?: boolean;
+}
+
+export interface ClientFeedback {
+  id: string;
+  user_id: string;
+  description: string;
+  date: string;
+  file_name?: string; // Simulated file name
+}
+
+export interface WorkSubmission {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  date: string;
+  file_name?: string; // Simulated file name
+}
+
+export interface AppraisalWeights {
+  technical: number;
+  collaboration: number;
+  business_impact: number;
+  professionalism: number;
+}
+
+export interface AppraisalScores {
+  technical_score: number;
+  collaboration_score: number;
+  business_score: number;
+  professional_score: number;
+  final_appraisal_rating: number; 
+  ai_narrative: string;
 }
 
 export interface Team {
@@ -15,7 +50,9 @@ export interface Team {
   team_name: string;
   repo_url: string; 
   created_by: string;
+  assigned_manager_id?: string;
   github_token?: string;
+  weights?: AppraisalWeights;
 }
 
 export interface CommitData {
@@ -35,13 +72,15 @@ export interface CommitData {
   slack_messages: number;
   slack_threads: number;
   slack_mentions: number;
-  // Computed scores
+  mentoring_score: number;
+  client_appreciation: number;
+  attendance_rate: number; 
+  org_involvement: number;
   activity_score: number;
   impact_score: number;
   collaboration_score: number;
   visibility_score: number;
   final_score: number;
-  // AI related fields
   ai_explanation?: string;
 }
 
@@ -53,8 +92,7 @@ export interface ScoreMetrics {
   avg_visibility: number;
   final_contribution_score: number;
   rank: number;
-  badge: 'Silent Architect' | 'High Visibility / Low Impact' | 'Balanced Contributor' | 'N/A';
-  // Additional metrics used in UI
-  category?: string;
+  badge: 'Silent Architect' | 'High Visibility / Low Impact' | 'Balanced Contributor' | 'Star Performer' | 'N/A';
+  appraisal?: AppraisalScores;
   z_score?: number;
 }

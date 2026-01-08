@@ -1,30 +1,41 @@
 
 # 🚀 ImpactLens - Local Setup Instructions
 
-To run this platform on your local machine, follow these steps:
+Follow these steps to get the platform running on your local machine in under 2 minutes.
 
 ### 1. Prerequisites
-- **Node.js** (v18+)
-- **MySQL Server** (Optional, for real DB persistence)
-- **GitHub Personal Access Token** (Recommended for higher rate limits)
+- **Node.js** (v18 or higher) installed on your system.
 
-### 2. Setup
-1. Download the files to a local directory.
-2. If using MySQL:
-   - Execute the provided `schema.sql` in your MySQL instance.
-   - Update `mockDb.ts` to connect to your real Node.js/MySQL backend.
-3. If running purely in-browser:
-   - Use a local dev server like `npx serve .` or VS Code Live Server.
+### 2. Installation
+1. Extract the ZIP file into a folder.
+2. Open your terminal (Command Prompt, PowerShell, or Terminal) in that folder.
+3. Run the following command to install the development server:
+   ```bash
+   npm install
+   ```
 
-### 3. API Key Configuration
-This app uses the Gemini 2.5/3 API for commit analysis.
-- The `API_KEY` is expected in the environment.
-- If running locally via a build tool like Vite, add `VITE_API_KEY=your_key` to an `.env` file.
+### 3. Set your API Key
+The app uses Google Gemini for code analysis. You need an API key from [Google AI Studio](https://aistudio.google.com/).
+- **Option A (Temporary):** Open `vite.config.ts` and replace `'YOUR_API_KEY_HERE'` with your actual key.
+- **Option B (Recommended):** Set an environment variable in your terminal before starting:
+  ```bash
+  # Windows (PowerShell)
+  $env:API_KEY="your_key_here"; npm run dev
+  
+  # Mac/Linux
+  export API_KEY="your_key_here" && npm run dev
+  ```
 
-### 4. How to Use (Demo Flow)
+### 4. Start the App
+Run this command:
+```bash
+npm run dev
+```
+The app will automatically open in your browser at `http://localhost:5173`.
+
+### 5. Demo Flow
 1. **Login** as **Alice Director**.
-2. **Create a Team** and enter a repo like `facebook/react`.
-3. **Map Users**: Ensure Charlie Dev has the GitHub username `charlie_code`.
+2. **Create a Team**: Enter `facebook/react`.
+3. **Map Users**: Ensure "Charlie Dev" has the GitHub username `charlie_code`.
 4. **Login** as **Bob Manager**.
-5. **Sync Data**: Click 'Sync Data' to trigger the GitHub Ingestion & AI Scoring engine.
-6. **Login** as **Charlie Dev** to see your personal impact score and ranking.
+5. **Sync Data**: Click "Demo Data" to see the "Silent Architect" logic in action immediately!

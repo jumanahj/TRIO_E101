@@ -1,64 +1,119 @@
 
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../App';
-import { INITIAL_USERS } from '../constants';
+import { mockDb } from '../services/mockDb';
 
 const Login = () => {
-  const { login } = useAuth();
+  const { login, user: existingUser } = useAuth();
   const navigate = useNavigate();
+  
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLogin = (user: typeof INITIAL_USERS[0]) => {
-    login(user);
-    if (user.role === 'Director') navigate('/director');
-    if (user.role === 'Manager') navigate('/manager');
-    if (user.role === 'Employee') navigate('/employee');
+  // Redirect if already logged in
+  useEffect(() => {
+    if (existingUser) {
+      navigate(`/${existingUser.role.toLowerCase()}`);
+    }
+  }, [existingUser]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const user = await mockDb.verifyCredentials(username, password);
+      
+      if (user) {
+        login(user);
+        // Automatic redirection based on detected role
+        navigate(`/${user.role.toLowerCase()}`);
+      } else {
+        setError('Identification failed. Check your credentials or contact your administrator.');
+      }
+    } catch (err) {
+      setError('A system error occurred during authentication.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-6 bg-slate-50">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-indigo-200">
-            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900">ImpactLens</h1>
-          <p className="mt-2 text-slate-600">AI-Powered Developer Intelligence Platform</p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
+      {/* Decorative Blur Backgrounds */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 blur-[120px] -z-10 rounded-full"></div>
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/5 blur-[120px] -z-10 rounded-full"></div>
 
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-800 mb-6 text-center">Select Role to Demo</h2>
-          <div className="space-y-4">
-            {INITIAL_USERS.map((u) => (
-              <button
-                key={u.user_id}
-                onClick={() => handleLogin(u)}
-                className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-indigo-600 hover:bg-indigo-50 transition-all group"
-              >
-                <div className="flex items-center gap-4 text-left">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-800">{u.name}</p>
-                    <p className="text-sm text-slate-500 uppercase tracking-wide font-medium">{u.role}</p>
-                  </div>
-                </div>
-                <svg className="w-5 h-5 text-slate-400 group-hover:text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            ))}
+      <div className="max-w-md w-full animate-fade-in">
+        <Link to="/" className="inline-flex items-center text-slate-400 hover:text-slate-900 mb-8 transition-colors font-black text-xs uppercase tracking-widest group">
+          <svg className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to ImpactLens
+        </Link>
+
+        <div className="bg-white p-12 rounded-[3rem] shadow-2xl shadow-slate-200 border border-slate-100 relative overflow-hidden">
+          {/* Top accent line */}
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-600 via-indigo-500 to-emerald-500"></div>
+
+          <div className="text-center mb-10">
+            <div className="w-20 h-20 bg-slate-900 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-slate-200 animate-float">
+              <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Access Portal</h1>
+            <p className="mt-2 text-slate-400 text-[10px] font-black italic tracking-[0.2em] uppercase">Identity Verification Required</p>
           </div>
-          
-          <div className="mt-8 p-4 bg-amber-50 rounded-xl border border-amber-100">
-            <p className="text-xs text-amber-800 leading-relaxed">
-              <span className="font-bold">Hackathon Prototype:</span> This mock login bypasses real auth. In production, this would use OAuth for secure GitHub access.
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-[11px] font-black uppercase tracking-tight text-center animate-in slide-in-from-top-2">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1 ml-2">Username or ID</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Identification string"
+                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all text-slate-900 font-bold outline-none placeholder:text-slate-300"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1 ml-2">Access Key</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all text-slate-900 font-bold outline-none placeholder:text-slate-300"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-lg shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 mt-4"
+            >
+              {loading ? 'Authenticating...' : 'Sign In'}
+            </button>
+          </form>
+
+          <div className="mt-10 pt-8 border-t border-slate-50 text-center">
+            <p className="text-[10px] text-slate-300 font-black uppercase tracking-widest leading-relaxed">
+              Protected by ImpactLens Intelligence Layer<br/>&copy; 2024 Enterprise Dynamics
             </p>
           </div>
         </div>

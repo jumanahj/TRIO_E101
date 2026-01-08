@@ -12,15 +12,10 @@ export const api = {
     const rawCommits = useDemo ? githubService.getDemoCommits() : await githubService.fetchCommits(team.repo_url, team.github_token);
 
     const processedCommits: CommitData[] = rawCommits.map((c: any) => {
-      // PART 2: Metrics Formulas
-      const activity_score = (1 * 1) + (c.is_pr_merged ? 2 : 0); // Simplified for prototype: 1 commit + 2 if merged
+      const activity_score = (1 * 1) + (c.is_pr_merged ? 2 : 0);
       const impact_score = (c.is_bug_fix ? 5 : 0) + (c.is_pr_merged ? 3 : 0) + (c.files_changed * 0.5);
       const collaboration_score = (c.pr_reviews_given * 4) + (c.review_comments * 2) + (c.issue_comments * 1.5);
-      
-      // PART 3: Slack Visibility
       const visibility_score = (c.slack_messages * 1) + (c.slack_threads * 2) + (c.slack_mentions * 1.5);
-      
-      // PART 2: Final Contribution Score
       const final_score = (0.2 * activity_score) + (0.6 * impact_score) + (0.2 * collaboration_score);
 
       return {
@@ -47,6 +42,8 @@ export const api = {
     const commits = mockDb.getCommitsByTeam(teamId);
     if (!commits.length) return;
 
+    const allFeedback = mockDb.getClientFeedback();
+
     const userStats = new Map<string, { 
       impact: number, activity: number, collab: number, vis: number, final: number, count: number 
     }>();
@@ -64,23 +61,29 @@ export const api = {
       s.count += 1;
     });
 
-    const userMetrics = Array.from(userStats.entries()).map(([username, s]) => ({
-      user_id: username,
-      avg_impact: s.impact / s.count,
-      avg_activity: s.activity / s.count,
-      avg_collaboration: s.collab / s.count,
-      avg_visibility: s.vis / s.count,
-      final_contribution_score: s.final / s.count,
-    }));
+    const userMetrics = Array.from(userStats.entries()).map(([username, s]) => {
+      const avgImpact = s.impact / s.count;
+      
+      // Calculate Feedback Bonus
+      const userFeedback = allFeedback.filter(f => f.user_id === username).length;
+      const feedbackBonus = userFeedback * 1.5; // Internal bonus points
 
-    // PART 5: Normalization
+      return {
+        user_id: username,
+        avg_impact: avgImpact + feedbackBonus,
+        avg_activity: s.activity / s.count,
+        avg_collaboration: s.collab / s.count,
+        avg_visibility: s.vis / s.count,
+        final_contribution_score: (s.final / s.count) + (feedbackBonus * 0.5),
+      };
+    });
+
     const teamAvgImpact = userMetrics.reduce((a, b) => a + b.avg_impact, 0) / userMetrics.length;
     const teamAvgVisibility = userMetrics.reduce((a, b) => a + (b.avg_activity + b.avg_visibility), 0) / userMetrics.length;
 
     const rankings: ScoreMetrics[] = userMetrics.map(u => {
       const combinedVisibility = u.avg_activity + u.avg_visibility;
       
-      // PART 4: Silent Architect Detection
       let badge: ScoreMetrics['badge'] = 'Balanced Contributor';
       if (u.avg_impact > teamAvgImpact && combinedVisibility < teamAvgVisibility) {
         badge = 'Silent Architect';

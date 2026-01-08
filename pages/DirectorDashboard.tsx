@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Team, User } from '../types';
 import { mockDb } from '../services/mockDb';
 import { githubService } from '../services/githubService';
@@ -12,14 +12,20 @@ const DirectorDashboard = () => {
   const [newTeamName, setNewTeamName] = useState('');
   const [newRepoUrl, setNewRepoUrl] = useState('facebook/react');
   const [githubToken, setGithubToken] = useState('');
+  const [assignedManagerId, setAssignedManagerId] = useState('');
   
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
+  const [scannedMembers, setScannedMembers] = useState<{login: string, avatar_url: string}[]>([]);
 
   useEffect(() => {
     setTeams(mockDb.getTeams());
     setUsers(mockDb.getUsers());
+    const managers = mockDb.getUsers().filter(u => u.role === 'Manager');
+    if (managers.length > 0) setAssignedManagerId(managers[0].user_id);
   }, []);
+
+  const managers = users.filter(u => u.role === 'Manager');
 
   const cleanRepoPath = (path: string) => {
     return path
@@ -28,14 +34,19 @@ const DirectorDashboard = () => {
       .trim();
   };
 
-  const handleTestConnection = async () => {
+  const handleTestAndScan = async () => {
     if (!newRepoUrl) return;
     setTesting(true);
     setTestResult(null);
+    setScannedMembers([]);
     try {
       const repoPath = cleanRepoPath(newRepoUrl);
       await githubService.validateRepo(repoPath, githubToken);
-      setTestResult({ success: true, message: `Connected to ${repoPath}!` });
+      
+      const collaborators = await githubService.fetchCollaborators(repoPath, githubToken);
+      setScannedMembers(collaborators);
+      
+      setTestResult({ success: true, message: `Connected! Found ${collaborators.length} collaborators.` });
     } catch (e: any) {
       setTestResult({ success: false, message: e.message });
     } finally {
@@ -48,50 +59,64 @@ const DirectorDashboard = () => {
     if (!newTeamName || !newRepoUrl) return;
 
     const repoPath = cleanRepoPath(newRepoUrl);
+    const teamId = `t${Date.now()}`;
 
     const newTeam: Team = {
-      team_id: `t${Date.now()}`,
+      team_id: teamId,
       team_name: newTeamName,
       repo_url: repoPath,
       created_by: currentUser!.user_id,
+      assigned_manager_id: assignedManagerId || undefined,
       github_token: githubToken.trim() || undefined
     };
 
     const updatedTeams = [...teams, newTeam];
     setTeams(updatedTeams);
     mockDb.saveTeams(updatedTeams);
+
+    if (scannedMembers.length > 0) {
+      mockDb.syncTeamEmployees(teamId, scannedMembers as any);
+      setUsers(mockDb.getUsers()); 
+    }
+
     setNewTeamName('');
     setNewRepoUrl('');
     setGithubToken('');
     setTestResult(null);
+    setScannedMembers([]);
   };
 
-  const handleUpdateUserTeam = (userId: string, teamId: string) => {
-    const updatedUsers = users.map(u => u.user_id === userId ? { ...u, team_id: teamId } : u);
-    setUsers(updatedUsers);
-    mockDb.saveUsers(updatedUsers);
+  const getManagerName = (mid?: string) => {
+    const m = managers.find(u => u.user_id === mid);
+    return m ? m.name : 'Unassigned';
   };
 
-  const handleUpdateGithubUsername = (userId: string, githubUsername: string) => {
-    const updatedUsers = users.map(u => u.user_id === userId ? { ...u, github_username: githubUsername } : u);
-    setUsers(updatedUsers);
-    mockDb.saveUsers(updatedUsers);
-  };
+  const teamGroupedEmployees = useMemo(() => {
+    const employeeUsers = users.filter(u => u.role === 'Employee');
+    const groups: Record<string, User[]> = {};
+    
+    employeeUsers.forEach(u => {
+      const tid = u.team_id || 'unassigned';
+      if (!groups[tid]) groups[tid] = [];
+      groups[tid].push(u);
+    });
+    
+    return groups;
+  }, [users]);
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       <header className="flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Director Portal</h1>
-          <p className="text-slate-500">System Setup & Team Architecture</p>
+          <p className="text-slate-500">Organizational Governance & Team Delegation</p>
         </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Team Creation */}
         <div className="md:col-span-1 space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">Create New Team</h2>
+            <h2 className="text-lg font-bold text-slate-800 mb-4">Provision New Team</h2>
             <form onSubmit={handleCreateTeam} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Team Name</label>
@@ -104,6 +129,21 @@ const DirectorDashboard = () => {
                   className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Assign Responsible Manager</label>
+                <select 
+                  value={assignedManagerId}
+                  onChange={e => setAssignedManagerId(e.target.value)}
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                >
+                  <option value="">Choose a Manager...</option>
+                  {managers.map(m => (
+                    <option key={m.user_id} value={m.user_id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">GitHub Repo Path</label>
                 <div className="flex gap-2">
@@ -117,11 +157,11 @@ const DirectorDashboard = () => {
                   />
                   <button 
                     type="button"
-                    onClick={handleTestConnection}
+                    onClick={handleTestAndScan}
                     disabled={testing}
-                    className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors text-xs font-bold"
+                    className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-xs font-bold whitespace-nowrap"
                   >
-                    {testing ? '...' : 'Test'}
+                    {testing ? 'Scanning...' : 'Scan Repo'}
                   </button>
                 </div>
                 {testResult && (
@@ -130,104 +170,102 @@ const DirectorDashboard = () => {
                   </p>
                 )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  GitHub Token <span className="text-xs font-normal text-slate-400">(Optional)</span>
-                </label>
-                <input 
-                  type="password"
-                  value={githubToken}
-                  onChange={e => setGithubToken(e.target.value)}
-                  placeholder="ghp_xxxxxxxxxxxx"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">Required for private repos or high-volume usage.</p>
-              </div>
-              <button className="w-full py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100">
+
+              {scannedMembers.length > 0 && (
+                <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <h3 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Collaborators Found</h3>
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar">
+                    {scannedMembers.map(m => (
+                      <div key={m.login} className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
+                        <img src={m.avatar_url} className="w-4 h-4 rounded-full" alt="" />
+                        <span className="text-[10px] font-bold text-slate-700">@{m.login}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button 
+                type="submit"
+                disabled={!testResult?.success}
+                className="w-full py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 disabled:opacity-50"
+              >
                 Initialize Team
               </button>
             </form>
           </div>
 
           <div className="bg-slate-900 p-6 rounded-2xl text-white shadow-xl">
-             <h3 className="text-lg font-bold mb-2">Team Overview</h3>
-             <div className="space-y-4">
-               {teams.length === 0 ? (
-                 <p className="text-slate-400 text-sm">No teams configured yet.</p>
-               ) : (
-                 teams.map(t => (
-                   <div key={t.team_id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/10">
-                     <div>
-                       <p className="font-semibold text-white">{t.team_name}</p>
-                       <p className="text-xs text-indigo-300">{t.repo_url}</p>
-                     </div>
-                     <div className="flex flex-col items-end gap-1">
-                        <span className="text-xs px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-lg">Active</span>
-                        {t.github_token && <span className="text-[10px] text-emerald-400">Auth Enabled</span>}
-                     </div>
+             <h3 className="text-lg font-bold mb-4">Manager Directory</h3>
+             <div className="space-y-3">
+               {managers.map(m => (
+                 <div key={m.user_id} className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                   <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-xs">
+                     {m.name.charAt(0)}
                    </div>
-                 ))
-               )}
+                   <div>
+                     <p className="text-sm font-bold">{m.name}</p>
+                     <p className="text-[10px] text-slate-400 tracking-wider uppercase">Active Manager</p>
+                   </div>
+                 </div>
+               ))}
              </div>
           </div>
         </div>
 
-        {/* User Mapping */}
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">Developer Mapping</h2>
-              <p className="text-sm text-slate-500">Link GitHub usernames to internal employees for impact tracking</p>
+              <h2 className="text-lg font-bold text-slate-800">Team-wise Organization Structure</h2>
+              <p className="text-sm text-slate-500">View team groupings and manager assignments</p>
             </div>
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Employee</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Role</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">GitHub Username</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Team</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users.filter(u => u.role !== 'Director').map(u => (
-                  <tr key={u.user_id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                          {u.name.charAt(0)}
-                        </div>
-                        <span className="font-medium text-slate-800">{u.name}</span>
+            <div className="p-6 space-y-6 max-h-[700px] overflow-y-auto custom-scrollbar">
+              {teams.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 italic">No teams registered in the system.</div>
+              ) : (
+                teams.map(team => (
+                  <div key={team.team_id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Team: {team.team_name}</h3>
+                        <p className="text-xs text-slate-500 font-mono">{team.repo_url}</p>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-md text-xs font-semibold ${u.role === 'Manager' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <input 
-                        type="text"
-                        defaultValue={u.github_username}
-                        onBlur={(e) => handleUpdateGithubUsername(u.user_id, e.target.value)}
-                        className="bg-transparent border-b border-dashed border-slate-300 focus:border-indigo-500 focus:outline-none text-sm text-slate-700 w-full"
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <select 
-                        value={u.team_id || ''}
-                        onChange={(e) => handleUpdateUserTeam(u.user_id, e.target.value)}
-                        className="bg-slate-50 border border-slate-200 rounded-lg text-sm px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value="">Unassigned</option>
-                        {teams.map(t => (
-                          <option key={t.team_id} value={t.team_id}>{t.team_name}</option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <div className="text-right">
+                        <span className="text-[10px] font-black uppercase text-indigo-500 block mb-1">Manager</span>
+                        <span className="px-3 py-1 bg-white border border-indigo-100 text-indigo-700 rounded-full text-xs font-bold">
+                          {getManagerName(team.assigned_manager_id)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-black uppercase text-slate-400 block tracking-widest">Employees ({teamGroupedEmployees[team.team_id]?.length || 0})</span>
+                      <div className="flex flex-wrap gap-2">
+                        {teamGroupedEmployees[team.team_id]?.map(emp => (
+                          <div key={emp.user_id} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+                            {emp.avatar_url && <img src={emp.avatar_url} className="w-4 h-4 rounded-full" alt="" />}
+                            <span className="text-xs font-bold text-slate-700">@{emp.github_username}</span>
+                          </div>
+                        )) || <p className="text-xs text-slate-400 italic">No employees assigned to this repo yet.</p>}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              {teamGroupedEmployees['unassigned'] && (
+                <div className="p-5 bg-rose-50 rounded-2xl border border-rose-100 space-y-4">
+                  <h3 className="text-lg font-black text-rose-900">Unassigned Talent</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {teamGroupedEmployees['unassigned'].map(emp => (
+                      <div key={emp.user_id} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-rose-200 shadow-sm">
+                        <span className="text-xs font-bold text-rose-700">@{emp.github_username}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
